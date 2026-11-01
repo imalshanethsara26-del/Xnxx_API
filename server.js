@@ -24,58 +24,72 @@ app.get('/', (req, res) => {
         status: true,
         message: "IMALSHA XNXX FAST API is Live 🚀",
         endpoints: {
-            latest: "/api/v1/xnxx/latest?page=1",
+            latest: "/api/v1/xnxx/latest?page=1&month=2026-09",
             search: "/api/v1/xnxx/search?q=query&page=1",
             infodl: "/api/v1/xnxx/infodl?url=video_page_url"
         }
     });
 });
 
-// 1. LATEST ENDPOINT (Fixed with Age Verification Cookie & Safe URL)
+// Helper function to extract video items robustly from any XNXX page HTML
+function extractVideos(html, $) {
+    const results = [];
+    $('a[href*="/video-"]').each((i, el) => {
+        const href = $(el).attr('href') || '';
+        const title = $(el).attr('title') || $(el).find('img').attr('alt') || $(el).text().trim();
+        const parent = $(el).closest('.thumb-block, .m-block, div');
+        
+        let img = parent.find('img').attr('data-src') || parent.find('img').attr('src') || $(el).find('img').attr('src') || '';
+        let duration = parent.find('.metadata, .duration').text().trim() || 'N/A';
+
+        if (href && title && title.length > 2 && !results.some(r => r.link === href)) {
+            const cleanTitle = title.replace(/\t|\n/g, '').trim();
+            if (cleanTitle && !cleanTitle.includes('XNXX')) {
+                results.push({
+                    title: cleanTitle,
+                    duration: duration,
+                    image: img,
+                    link: href.startsWith('http') ? href : `${BASE_URL}${href}`
+                });
+            }
+        }
+    });
+    return results;
+}
+
+// 1. LATEST / MONTHLY ARCHIVE ENDPOINT
 app.get('/api/v1/xnxx/latest', async (req, res) => {
     try {
         const pageNum = req.query.page || 1;
-        const cacheKey = `xnxx_latest_page_${pageNum}`;
+        const monthYear = req.query.month; // උදා: 2026-09 (අවශ්‍ය නම් පමණක් දෙන්න)
+        
+        let targetUrl = `${BASE_URL}/best`;
+        if (monthYear) {
+            targetUrl = pageNum == 1 ? `${BASE_URL}/best/${monthYear}` : `${BASE_URL}/best/${monthYear}/${pageNum}`;
+        } else {
+            targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/${pageNum}`;
+        }
 
+        const cacheKey = `xnxx_latest_${monthYear || 'general'}_page_${pageNum}`;
         if (appCache.has(cacheKey)) {
-            console.log(`⚡ [CACHE HIT] Serving Latest Page: ${pageNum}`);
+            console.log(`⚡ [CACHE HIT] Serving: ${targetUrl}`);
             return res.json(appCache.get(cacheKey));
         }
 
-        const targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/${pageNum}`;
         console.log(`🔍 Fetching URL: ${targetUrl}`);
-
         const response = await axios.get(targetUrl, { 
-            headers: {
-                ...HEADERS,
-                'Cookie': 'age_verified=1'
-            }, 
+            headers: { ...HEADERS, 'Cookie': 'age_verified=1' }, 
             timeout: 30000 
         });
         
         const $ = cheerio.load(response.data);
-        const results = [];
-
-        $('.m-block, .mozaique .thumb-block').each((i, el) => {
-            const title = $(el).find('.thumb-under a').attr('title') || $(el).find('a').attr('title') || 'No Title';
-            const link = $(el).find('.thumb-under a').attr('href') || $(el).find('a').attr('href') || '';
-            let image = $(el).find('img').attr('data-src') || $(el).find('img').attr('src') || '';
-            const duration = $(el).find('.metadata').text().trim() || $(el).find('.duration').text().trim() || 'N/A';
-
-            if (link && title !== 'No Title') {
-                results.push({
-                    title: title.trim(),
-                    duration: duration,
-                    image: image,
-                    link: link.startsWith('http') ? link : `${BASE_URL}${link}`
-                });
-            }
-        });
+        const results = extractVideos(response.data, $);
 
         const responseData = { 
             status: true, 
             creator: "@Imalsha", 
             site: "xnxx", 
+            period: monthYear || "latest",
             page: Number(pageNum), 
             count: results.length, 
             data: results 
@@ -89,7 +103,7 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
     }
 });
 
-// 2. SEARCH ENDPOINT (With Page Number Support & Cookie)
+// 2. SEARCH ENDPOINT
 app.get('/api/v1/xnxx/search', async (req, res) => {
     try {
         const query = req.query.q;
@@ -108,30 +122,12 @@ app.get('/api/v1/xnxx/search', async (req, res) => {
             : `${BASE_URL}/search/${encodeURIComponent(query)}/${pageNum}`;
 
         const response = await axios.get(searchUrl, { 
-            headers: {
-                ...HEADERS,
-                'Cookie': 'age_verified=1'
-            }, 
+            headers: { ...HEADERS, 'Cookie': 'age_verified=1' }, 
             timeout: 30000 
         });
+        
         const $ = cheerio.load(response.data);
-        const results = [];
-
-        $('.mozaique .thumb-block, .m-block').each((i, el) => {
-            const title = $(el).find('.thumb-under a').attr('title') || $(el).find('a').attr('title') || 'No Title';
-            const link = $(el).find('.thumb-under a').attr('href') || $(el).find('a').attr('href') || '';
-            let image = $(el).find('img').attr('data-src') || $(el).find('img').attr('src') || '';
-            const duration = $(el).find('.metadata').text().trim() || 'N/A';
-
-            if (link && title !== 'No Title') {
-                results.push({
-                    title: title.trim(),
-                    duration: duration,
-                    image: image,
-                    link: link.startsWith('http') ? link : `${BASE_URL}${link}`
-                });
-            }
-        });
+        const results = extractVideos(response.data, $);
 
         const responseData = { 
             status: true, 
@@ -164,21 +160,16 @@ app.get('/api/v1/xnxx/infodl', async (req, res) => {
 
     try {
         const response = await axios.get(videoUrl, { 
-            headers: {
-                ...HEADERS,
-                'Cookie': 'age_verified=1'
-            }, 
+            headers: { ...HEADERS, 'Cookie': 'age_verified=1' }, 
             timeout: 30000 
         });
         const html = response.data;
         const $ = cheerio.load(html);
 
-        // Extract metadata
         const title = $('meta[property="og:title"]').attr('content') || $('title').text().replace('- XNXX.COM', '').trim();
         const image = $('meta[property="og:image"]').attr('content') || '';
         const duration = $('meta[property="og:duration"]').attr('content') || 'N/A';
 
-        // Extract Direct MP4 Download Links from Script Variables
         let lowQuality = '';
         let highQuality = '';
         let hlsUrl = '';
