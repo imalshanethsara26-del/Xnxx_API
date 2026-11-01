@@ -31,33 +31,28 @@ app.get('/', (req, res) => {
     });
 });
 
-// 1. LATEST ENDPOINT (Auto Dynamic Current Year-Month Fix)
+// 1. LATEST ENDPOINT (Fixed with Age Verification Cookie & Safe URL)
 app.get('/api/v1/xnxx/latest', async (req, res) => {
     try {
         const pageNum = req.query.page || 1;
-        
-        // වත්මන් දිනය (Current Date) ලබාගෙන YYYY-MM ෆෝමැට් එකට සකස් කිරීම
-        const currentDate = new Date();
-        const year = currentDate.getFullYear();
-        let month = currentDate.getMonth() + 1;
-        month = month < 10 ? `0${month}` : month;
-        const currentYearMonth = `${year}-${month}`;
-
-        const cacheKey = `xnxx_latest_${currentYearMonth}_page_${pageNum}`;
+        const cacheKey = `xnxx_latest_page_${pageNum}`;
 
         if (appCache.has(cacheKey)) {
-            console.log(`⚡ [CACHE HIT] Serving Latest Page: ${pageNum} for ${currentYearMonth}`);
+            console.log(`⚡ [CACHE HIT] Serving Latest Page: ${pageNum}`);
             return res.json(appCache.get(cacheKey));
         }
 
-        // ඩයිනමික් ලෙස අද දිනට අදාළ මාසය (YYYY-MM) URL එකට එකතු වේ
-        const targetUrl = pageNum == 1 
-            ? `${BASE_URL}/best/${currentYearMonth}` 
-            : `${BASE_URL}/best/${currentYearMonth}/${pageNum}`;
-
+        const targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/${pageNum}`;
         console.log(`🔍 Fetching URL: ${targetUrl}`);
 
-        const response = await axios.get(targetUrl, { headers: HEADERS, timeout: 30000 });
+        const response = await axios.get(targetUrl, { 
+            headers: {
+                ...HEADERS,
+                'Cookie': 'age_verified=1'
+            }, 
+            timeout: 30000 
+        });
+        
         const $ = cheerio.load(response.data);
         const results = [];
 
@@ -81,7 +76,6 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
             status: true, 
             creator: "@Imalsha", 
             site: "xnxx", 
-            period: currentYearMonth, 
             page: Number(pageNum), 
             count: results.length, 
             data: results 
@@ -95,7 +89,7 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
     }
 });
 
-// 2. SEARCH ENDPOINT (With Page Number Support)
+// 2. SEARCH ENDPOINT (With Page Number Support & Cookie)
 app.get('/api/v1/xnxx/search', async (req, res) => {
     try {
         const query = req.query.q;
@@ -113,7 +107,13 @@ app.get('/api/v1/xnxx/search', async (req, res) => {
             ? `${BASE_URL}/search/${encodeURIComponent(query)}` 
             : `${BASE_URL}/search/${encodeURIComponent(query)}/${pageNum}`;
 
-        const response = await axios.get(searchUrl, { headers: HEADERS, timeout: 30000 });
+        const response = await axios.get(searchUrl, { 
+            headers: {
+                ...HEADERS,
+                'Cookie': 'age_verified=1'
+            }, 
+            timeout: 30000 
+        });
         const $ = cheerio.load(response.data);
         const results = [];
 
@@ -163,7 +163,13 @@ app.get('/api/v1/xnxx/infodl', async (req, res) => {
     }
 
     try {
-        const response = await axios.get(videoUrl, { headers: HEADERS, timeout: 30000 });
+        const response = await axios.get(videoUrl, { 
+            headers: {
+                ...HEADERS,
+                'Cookie': 'age_verified=1'
+            }, 
+            timeout: 30000 
+        });
         const html = response.data;
         const $ = cheerio.load(html);
 
