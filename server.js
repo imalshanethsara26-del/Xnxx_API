@@ -57,17 +57,16 @@ function extractVideos(html, $) {
     return results;
 }
 
-// 1. LATEST ENDPOINT (Fixed Real Pagination for XNXX)
+// 1. LATEST ENDPOINT (Fixed with ?p= pagination format)
 app.get('/api/v1/xnxx/latest', async (req, res) => {
     try {
         const pageNum = req.query.page || 1;
         const monthYear = req.query.month; // උදා: 2026-09
         
-        let targetUrl = `${BASE_URL}/best`;
+        // XNXX latest/best pagination uses ?p=2, ?p=3 format
+        let targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/?p=${pageNum}`;
         if (monthYear) {
-            targetUrl = pageNum == 1 ? `${BASE_URL}/best/${monthYear}` : `${BASE_URL}/best/${monthYear}/${pageNum}`;
-        } else {
-            targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/${pageNum}`;
+            targetUrl = pageNum == 1 ? `${BASE_URL}/best/${monthYear}` : `${BASE_URL}/best/${monthYear}/?p=${pageNum}`;
         }
 
         const cacheKey = `xnxx_latest_${monthYear || 'general'}_page_${pageNum}`;
@@ -103,7 +102,7 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
     }
 });
 
-// 2. SEARCH ENDPOINT (Fixed Pagination)
+// 2. SEARCH ENDPOINT (Fixed with /k/ or ?p= pagination)
 app.get('/api/v1/xnxx/search', async (req, res) => {
     try {
         const query = req.query.q;
@@ -117,10 +116,12 @@ app.get('/api/v1/xnxx/search', async (req, res) => {
             return res.json(appCache.get(cacheKey));
         }
 
+        // Search pagination format in XNXX
         const searchUrl = pageNum == 1 
             ? `${BASE_URL}/search/${encodeURIComponent(query)}` 
             : `${BASE_URL}/search/${encodeURIComponent(query)}/${pageNum}`;
 
+        console.log(`🔍 Fetching Search URL: ${searchUrl}`);
         const response = await axios.get(searchUrl, { 
             headers: { ...HEADERS, 'Cookie': 'age_verified=1' }, 
             timeout: 30000 
