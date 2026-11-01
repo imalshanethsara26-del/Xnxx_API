@@ -31,7 +31,7 @@ app.get('/', (req, res) => {
     });
 });
 
-// 1. LATEST ENDPOINT
+// 1. LATEST ENDPOINT (Fixed Dynamic URL & Pagination)
 app.get('/api/v1/xnxx/latest', async (req, res) => {
     try {
         const pageNum = req.query.page || 1;
@@ -42,8 +42,8 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
             return res.json(appCache.get(cacheKey));
         }
 
-        // Dynamic URL according to page number
-        const targetUrl = pageNum == 1 ? `${BASE_URL}/best/2026-11` : `${BASE_URL}/best/2026-11/${pageNum}`;
+        // Hardcoded dates නැතුව direct /best හෝ page number එක පාවිච්චි කිරීම
+        const targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/${pageNum}`;
         const response = await axios.get(targetUrl, { headers: HEADERS, timeout: 30000 });
         const $ = cheerio.load(response.data);
         const results = [];
@@ -69,11 +69,12 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
 
         res.json(responseData);
     } catch (err) {
+        console.error(`❌ Error in latest: ${err.message}`);
         res.status(500).json({ status: false, error: err.message });
     }
 });
 
-// 2. SEARCH ENDPOINT
+// 2. SEARCH ENDPOINT (With Page Number Support)
 app.get('/api/v1/xnxx/search', async (req, res) => {
     try {
         const query = req.query.q;
@@ -83,11 +84,14 @@ app.get('/api/v1/xnxx/search', async (req, res) => {
 
         const cacheKey = `xnxx_search_${query.toLowerCase().trim()}_p${pageNum}`;
         if (appCache.has(cacheKey)) {
-            console.log(`⚡ [CACHE HIT] Serving Search: ${query}`);
+            console.log(`⚡ [CACHE HIT] Serving Search: ${query}, Page: ${pageNum}`);
             return res.json(appCache.get(cacheKey));
         }
 
-        const searchUrl = `${BASE_URL}/search/${encodeURIComponent(query)}/${pageNum}`;
+        const searchUrl = pageNum == 1 
+            ? `${BASE_URL}/search/${encodeURIComponent(query)}` 
+            : `${BASE_URL}/search/${encodeURIComponent(query)}/${pageNum}`;
+
         const response = await axios.get(searchUrl, { headers: HEADERS, timeout: 30000 });
         const $ = cheerio.load(response.data);
         const results = [];
@@ -108,11 +112,20 @@ app.get('/api/v1/xnxx/search', async (req, res) => {
             }
         });
 
-        const responseData = { status: true, creator: "@Imalsha", site: "xnxx", query: query, page: Number(pageNum), count: results.length, data: results };
+        const responseData = { 
+            status: true, 
+            creator: "@Imalsha", 
+            site: "xnxx", 
+            query: query, 
+            page: Number(pageNum), 
+            count: results.length, 
+            data: results 
+        };
         appCache.set(cacheKey, responseData);
 
         res.json(responseData);
     } catch (err) {
+        console.error(`❌ Error in search: ${err.message}`);
         res.status(500).json({ status: false, error: err.message });
     }
 });
@@ -163,7 +176,7 @@ app.get('/api/v1/xnxx/infodl', async (req, res) => {
                 duration: duration,
                 downloads: {
                     low: lowQuality || 'N/A',
-                    high: highQuality || lowQuality, // Fallback to low if high isn't available
+                    high: highQuality || lowQuality,
                     hls: hlsUrl || 'N/A'
                 }
             }
@@ -173,6 +186,7 @@ app.get('/api/v1/xnxx/infodl', async (req, res) => {
         res.json(responseData);
 
     } catch (err) {
+        console.error(`❌ Error in infodl: ${err.message}`);
         res.status(500).json({ status: false, error: err.message });
     }
 });
