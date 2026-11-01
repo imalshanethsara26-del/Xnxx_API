@@ -24,14 +24,14 @@ app.get('/', (req, res) => {
         status: true,
         message: "IMALSHA XNXX FAST API is Live 🚀",
         endpoints: {
-            latest: "/api/v1/xnxx/latest?page=1&month=2026-09",
+            latest: "/api/v1/xnxx/latest?page=1",
             search: "/api/v1/xnxx/search?q=query&page=1",
             infodl: "/api/v1/xnxx/infodl?url=video_page_url"
         }
     });
 });
 
-// Helper function to extract video items robustly from any XNXX page HTML
+// Helper function to extract and clean video items properly
 function extractVideos(html, $) {
     const results = [];
     $('a[href*="/video-"]').each((i, el) => {
@@ -43,11 +43,12 @@ function extractVideos(html, $) {
         let duration = parent.find('.metadata, .duration').text().trim() || 'N/A';
 
         if (href && title && title.length > 2 && !results.some(r => r.link === href)) {
-            const cleanTitle = title.replace(/\t|\n/g, '').trim();
+            // \n සහ \t සම්පූර්ණයෙන්ම පිරිසිදු කිරීම
+            const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
             if (cleanTitle && !cleanTitle.includes('XNXX')) {
                 results.push({
                     title: cleanTitle,
-                    duration: duration,
+                    duration: duration.replace(/[\t\n\r]+/g, ' ').trim(),
                     image: img,
                     link: href.startsWith('http') ? href : `${BASE_URL}${href}`
                 });
@@ -57,17 +58,15 @@ function extractVideos(html, $) {
     return results;
 }
 
-// 1. LATEST / MONTHLY ARCHIVE ENDPOINT
+// 1. LATEST ENDPOINT (Fixed Pagination with ?p= parameter)
 app.get('/api/v1/xnxx/latest', async (req, res) => {
     try {
         const pageNum = req.query.page || 1;
-        const monthYear = req.query.month; // උදා: 2026-09 (අවශ්‍ය නම් පමණක් දෙන්න)
+        const monthYear = req.query.month; // උදා: 2026-09
         
-        let targetUrl = `${BASE_URL}/best`;
+        let targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/?p=${pageNum}`;
         if (monthYear) {
-            targetUrl = pageNum == 1 ? `${BASE_URL}/best/${monthYear}` : `${BASE_URL}/best/${monthYear}/${pageNum}`;
-        } else {
-            targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/${pageNum}`;
+            targetUrl = pageNum == 1 ? `${BASE_URL}/best/${monthYear}` : `${BASE_URL}/best/${monthYear}/?p=${pageNum}`;
         }
 
         const cacheKey = `xnxx_latest_${monthYear || 'general'}_page_${pageNum}`;
@@ -103,7 +102,7 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
     }
 });
 
-// 2. SEARCH ENDPOINT
+// 2. SEARCH ENDPOINT (Fixed Pagination)
 app.get('/api/v1/xnxx/search', async (req, res) => {
     try {
         const query = req.query.q;
@@ -189,7 +188,7 @@ app.get('/api/v1/xnxx/infodl', async (req, res) => {
             site: "xnxx",
             url: videoUrl,
             data: {
-                title: title,
+                title: title.replace(/[\t\n\r]+/g, ' ').trim(),
                 image: image,
                 duration: duration,
                 downloads: {
