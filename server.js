@@ -31,19 +31,32 @@ app.get('/', (req, res) => {
     });
 });
 
-// 1. LATEST ENDPOINT (Fixed Dynamic URL & Pagination)
+// 1. LATEST ENDPOINT (Auto Dynamic Current Year-Month Fix)
 app.get('/api/v1/xnxx/latest', async (req, res) => {
     try {
         const pageNum = req.query.page || 1;
-        const cacheKey = `xnxx_latest_page_${pageNum}`;
+        
+        // වත්මන් දිනය (Current Date) ලබාගෙන YYYY-MM ෆෝමැට් එකට සකස් කිරීම
+        const currentDate = new Date();
+        const year = currentDate.getFullYear();
+        let month = currentDate.getMonth() + 1;
+        month = month < 10 ? `0${month}` : month;
+        const currentYearMonth = `${year}-${month}`;
+
+        const cacheKey = `xnxx_latest_${currentYearMonth}_page_${pageNum}`;
 
         if (appCache.has(cacheKey)) {
-            console.log(`⚡ [CACHE HIT] Serving Latest Page: ${pageNum}`);
+            console.log(`⚡ [CACHE HIT] Serving Latest Page: ${pageNum} for ${currentYearMonth}`);
             return res.json(appCache.get(cacheKey));
         }
 
-        // Hardcoded dates නැතුව direct /best හෝ page number එක පාවිච්චි කිරීම
-        const targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/${pageNum}`;
+        // ඩයිනමික් ලෙස අද දිනට අදාළ මාසය (YYYY-MM) URL එකට එකතු වේ
+        const targetUrl = pageNum == 1 
+            ? `${BASE_URL}/best/${currentYearMonth}` 
+            : `${BASE_URL}/best/${currentYearMonth}/${pageNum}`;
+
+        console.log(`🔍 Fetching URL: ${targetUrl}`);
+
         const response = await axios.get(targetUrl, { headers: HEADERS, timeout: 30000 });
         const $ = cheerio.load(response.data);
         const results = [];
@@ -64,7 +77,15 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
             }
         });
 
-        const responseData = { status: true, creator: "@Imalsha", site: "xnxx", page: Number(pageNum), count: results.length, data: results };
+        const responseData = { 
+            status: true, 
+            creator: "@Imalsha", 
+            site: "xnxx", 
+            period: currentYearMonth, 
+            page: Number(pageNum), 
+            count: results.length, 
+            data: results 
+        };
         appCache.set(cacheKey, responseData);
 
         res.json(responseData);
