@@ -31,38 +31,40 @@ app.get('/', (req, res) => {
     });
 });
 
-// Helper function to extract images & video info strictly for both Latest & Search
+// Precise Video Extractor Function
 function extractVideos(html, $) {
     const results = [];
 
-    // XNXX Search Results & Thumb Blocks Iteration
     $('.thumb-block').each((i, el) => {
-        // 1. Link & Title Extraction
-        const titleAnchor = $(el).find('.thumb-under a, .title a, p a').first();
-        const href = titleAnchor.attr('href') || $(el).find('a[href*="/video-"]').attr('href') || '';
-        let title = titleAnchor.attr('title') || titleAnchor.text().trim() || $(el).find('img').attr('alt') || '';
+        // Video එකට අදාළ සැබෑ Video Link එක හා Title එක පමණක් තෝරා ගැනීම
+        const videoAnchor = $(el).find('a[href*="/video-"]').first();
+        const href = videoAnchor.attr('href') || '';
         
-        // 2. Comprehensive Image URL Selector (XNXX Search Lazy Load attributes)
+        // Title එක Title attribute එකෙන් හෝ .thumb-under p a / .title එකෙන් ලබා ගැනීම
+        let title = videoAnchor.attr('title') || 
+                    $(el).find('.thumb-under p.metadata a, .thumb-under p a').not('[href*="/porn-maker/"]').not('[href*="/profiles/"]').text().trim() ||
+                    $(el).find('.thumb-under p a').first().text().trim() || 
+                    $(el).find('img').attr('alt') || '';
+        
+        // Image extraction
         const imgEl = $(el).find('img');
         let img = imgEl.attr('data-src') || 
                   imgEl.attr('data-src-small') || 
                   imgEl.attr('src') || 
                   imgEl.attr('data-srcset') || '';
 
-        // 3. Fallback: Search inside HTML string / style attributes if img tag attribute is missing
         if (!img || img.startsWith('data:image')) {
             const blockHtml = $(el).html() || '';
             const imgMatch = blockHtml.match(/https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/i);
-            if (imgMatch) {
-                img = imgMatch[0];
-            }
+            if (imgMatch) img = imgMatch[0];
         }
 
-        // 4. Duration & Meta
+        // Duration & Meta
         let duration = $(el).find('.metadata, .duration, .metadata .flag').text().trim() || 'N/A';
         const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
 
-        if (href && cleanTitle && !results.some(r => r.link === href)) {
+        // ළඟ තියෙන Channel names මඟහැර සැබෑ Video Link එක පමණක් Filter කිරීම
+        if (href && href.includes('/video-') && cleanTitle && !results.some(r => r.link.includes(href))) {
             const fullLink = href.startsWith('http') ? href : `${BASE_URL}${href}`;
             results.push({
                 title: cleanTitle,
@@ -120,7 +122,7 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
     }
 });
 
-// 2. SEARCH ENDPOINT (Direct Regex Image Extraction for Search Page)
+// 2. SEARCH ENDPOINT
 app.get('/api/v1/xnxx/search', async (req, res) => {
     try {
         const query = req.query.q;
