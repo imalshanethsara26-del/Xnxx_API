@@ -1,0 +1,33 @@
+{
+  "name": "imalsha-xnxx-api",
+  "version": "1.0.0",
+  "description": "Fast backend API for scraping XNXX and providing direct video download endpoints for WhatsApp bot and web frontend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "api",
+    "scraper",
+    "express",
+    "nodejs",
+    "whatsapp-bot",
+    "xnxx"
+  ],
+  "author": "Imalsha Nethsara",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "node-cache": "^5.1.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  },
+  "engines": {
+    "node": ">=18.x"
+  }
+}
