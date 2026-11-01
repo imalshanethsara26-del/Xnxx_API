@@ -31,20 +31,56 @@ app.get('/', (req, res) => {
     });
 });
 
-// Helper function to extract and clean video items properly
+// Helper function to extract and clean video items properly (Fixed for Images)
 function extractVideos(html, $) {
     const results = [];
-    $('a[href*="/video-"]').each((i, el) => {
-        const href = $(el).attr('href') || '';
-        const title = $(el).attr('title') || $(el).find('img').attr('alt') || $(el).text().trim();
-        const parent = $(el).closest('.thumb-block, .m-block, div');
+    
+    $('.thumb-block, .m-block').each((i, el) => {
+        const titleAnchor = $(el).find('.thumb-under a, .title a, a[href*="/video-"]').first();
+        const href = titleAnchor.attr('href') || $(el).find('a[href*="/video-"]').attr('href') || '';
         
-        let img = parent.find('img').attr('data-src') || parent.find('img').attr('src') || $(el).find('img').attr('src') || '';
-        let duration = parent.find('.metadata, .duration').text().trim() || 'N/A';
+        let title = titleAnchor.attr('title') || titleAnchor.text().trim() || $(el).find('img').attr('alt') || '';
+        
+        // Thumbnail Image එක (data-src-small, data-src හෝ src) හරියටම අල්ලා ගැනීම
+        const imgEl = $(el).find('img');
+        let img = imgEl.attr('data-src') || 
+                  imgEl.attr('data-src-small') || 
+                  imgEl.attr('src') || '';
 
-        if (href && title && title.length > 2 && !results.some(r => r.link === href)) {
+        // Duration එක ලබාගැනීම
+        let duration = $(el).find('.metadata, .duration, .metadata .flag').text().trim() || 'N/A';
+
+        // Title එක පිරිසිදු කිරීම
+        const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+        if (href && cleanTitle && !results.some(r => r.link === href)) {
+            const fullLink = href.startsWith('http') ? href : `${BASE_URL}${href}`;
+
+            results.push({
+                title: cleanTitle,
+                duration: duration.replace(/[\t\n\r]+/g, ' ').trim(),
+                image: img,
+                link: fullLink
+            });
+        }
+    });
+
+    // Fallback in case container selector misses anything
+    if (results.length === 0) {
+        $('a[href*="/video-"]').each((i, el) => {
+            const href = $(el).attr('href') || '';
+            const title = $(el).attr('title') || $(el).find('img').attr('alt') || $(el).text().trim();
+            const parent = $(el).closest('.thumb-block, .m-block, div');
+            
+            let img = parent.find('img').attr('data-src') || 
+                      parent.find('img').attr('data-src-small') || 
+                      parent.find('img').attr('src') || 
+                      $(el).find('img').attr('src') || '';
+
+            let duration = parent.find('.metadata, .duration').text().trim() || 'N/A';
             const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
-            if (cleanTitle && !cleanTitle.includes('XNXX')) {
+
+            if (href && cleanTitle && cleanTitle.length > 2 && !results.some(r => r.link === href)) {
                 results.push({
                     title: cleanTitle,
                     duration: duration.replace(/[\t\n\r]+/g, ' ').trim(),
@@ -52,18 +88,18 @@ function extractVideos(html, $) {
                     link: href.startsWith('http') ? href : `${BASE_URL}${href}`
                 });
             }
-        }
-    });
+        });
+    }
+
     return results;
 }
 
-// 1. LATEST ENDPOINT (Fixed with ?p= pagination format)
+// 1. LATEST ENDPOINT
 app.get('/api/v1/xnxx/latest', async (req, res) => {
     try {
         const pageNum = req.query.page || 1;
-        const monthYear = req.query.month; // උදා: 2026-09
+        const monthYear = req.query.month;
         
-        // XNXX latest/best pagination uses ?p=2, ?p=3 format
         let targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/?p=${pageNum}`;
         if (monthYear) {
             targetUrl = pageNum == 1 ? `${BASE_URL}/best/${monthYear}` : `${BASE_URL}/best/${monthYear}/?p=${pageNum}`;
@@ -102,7 +138,7 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
     }
 });
 
-// 2. SEARCH ENDPOINT (Fixed with /k/ or ?p= pagination)
+// 2. SEARCH ENDPOINT
 app.get('/api/v1/xnxx/search', async (req, res) => {
     try {
         const query = req.query.q;
@@ -116,7 +152,6 @@ app.get('/api/v1/xnxx/search', async (req, res) => {
             return res.json(appCache.get(cacheKey));
         }
 
-        // Search pagination format in XNXX
         const searchUrl = pageNum == 1 
             ? `${BASE_URL}/search/${encodeURIComponent(query)}` 
             : `${BASE_URL}/search/${encodeURIComponent(query)}/${pageNum}`;
