@@ -31,26 +31,31 @@ app.get('/', (req, res) => {
     });
 });
 
-// Helper function to extract and clean video items properly (Fixed for Images)
+// Helper function to extract and clean video items properly (Fixed Image Extraction)
 function extractVideos(html, $) {
     const results = [];
-    
-    $('.thumb-block, .m-block').each((i, el) => {
+
+    $('.thumb-block, .m-block, div[id^="video_"]').each((i, el) => {
         const titleAnchor = $(el).find('.thumb-under a, .title a, a[href*="/video-"]').first();
         const href = titleAnchor.attr('href') || $(el).find('a[href*="/video-"]').attr('href') || '';
         
         let title = titleAnchor.attr('title') || titleAnchor.text().trim() || $(el).find('img').attr('alt') || '';
         
-        // Thumbnail Image එක (data-src-small, data-src හෝ src) හරියටම අල්ලා ගැනීම
+        // Thumbnail extraction hierarchy
         const imgEl = $(el).find('img');
         let img = imgEl.attr('data-src') || 
                   imgEl.attr('data-src-small') || 
-                  imgEl.attr('src') || '';
+                  imgEl.attr('src') || 
+                  imgEl.attr('data-srcset') || '';
 
-        // Duration එක ලබාගැනීම
+        // If img tag fails, look inside style background-image
+        if (!img) {
+            const styleAttr = $(el).find('.thumb, .img').attr('style') || '';
+            const bgMatch = styleAttr.match(/url\(['"]?(.*?)['"]?\)/);
+            if (bgMatch) img = bgMatch[1];
+        }
+
         let duration = $(el).find('.metadata, .duration, .metadata .flag').text().trim() || 'N/A';
-
-        // Title එක පිරිසිදු කිරීම
         const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
 
         if (href && cleanTitle && !results.some(r => r.link === href)) {
@@ -64,32 +69,6 @@ function extractVideos(html, $) {
             });
         }
     });
-
-    // Fallback in case container selector misses anything
-    if (results.length === 0) {
-        $('a[href*="/video-"]').each((i, el) => {
-            const href = $(el).attr('href') || '';
-            const title = $(el).attr('title') || $(el).find('img').attr('alt') || $(el).text().trim();
-            const parent = $(el).closest('.thumb-block, .m-block, div');
-            
-            let img = parent.find('img').attr('data-src') || 
-                      parent.find('img').attr('data-src-small') || 
-                      parent.find('img').attr('src') || 
-                      $(el).find('img').attr('src') || '';
-
-            let duration = parent.find('.metadata, .duration').text().trim() || 'N/A';
-            const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-            if (href && cleanTitle && cleanTitle.length > 2 && !results.some(r => r.link === href)) {
-                results.push({
-                    title: cleanTitle,
-                    duration: duration.replace(/[\t\n\r]+/g, ' ').trim(),
-                    image: img,
-                    link: href.startsWith('http') ? href : `${BASE_URL}${href}`
-                });
-            }
-        });
-    }
 
     return results;
 }
