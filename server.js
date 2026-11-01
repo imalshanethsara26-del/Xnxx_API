@@ -31,36 +31,26 @@ app.get('/', (req, res) => {
     });
 });
 
-// Helper function to extract and clean video items properly (Fixed Image Extraction)
+// Helper function to extract and clean video items properly (Ultra-Compatible Fallback)
 function extractVideos(html, $) {
     const results = [];
 
-    $('.thumb-block, .m-block, div[id^="video_"]').each((i, el) => {
-        const titleAnchor = $(el).find('.thumb-under a, .title a, a[href*="/video-"]').first();
-        const href = titleAnchor.attr('href') || $(el).find('a[href*="/video-"]').attr('href') || '';
+    // XNXX වල මූලික වීඩියෝ බ්ලොක්ස් හෝ thumb පෙළගැසෙන තැන්
+    $('.thumb-block, .mozaique .thumb, div.thumb-under').each((i, el) => {
+        const container = $(el).closest('.thumb-block');
+        const titleAnchor = container.find('.title a, a[href*="/video-"]').first();
+        const href = titleAnchor.attr('href') || container.find('a[href*="/video-"]').attr('href') || '';
         
-        let title = titleAnchor.attr('title') || titleAnchor.text().trim() || $(el).find('img').attr('alt') || '';
+        let title = titleAnchor.attr('title') || titleAnchor.text().trim();
         
-        // Thumbnail extraction hierarchy
-        const imgEl = $(el).find('img');
-        let img = imgEl.attr('data-src') || 
-                  imgEl.attr('data-src-small') || 
-                  imgEl.attr('src') || 
-                  imgEl.attr('data-srcset') || '';
+        const imgEl = container.find('img');
+        let img = imgEl.attr('data-src') || imgEl.attr('data-src-small') || imgEl.attr('src') || '';
 
-        // If img tag fails, look inside style background-image
-        if (!img) {
-            const styleAttr = $(el).find('.thumb, .img').attr('style') || '';
-            const bgMatch = styleAttr.match(/url\(['"]?(.*?)['"]?\)/);
-            if (bgMatch) img = bgMatch[1];
-        }
-
-        let duration = $(el).find('.metadata, .duration, .metadata .flag').text().trim() || 'N/A';
+        let duration = container.find('.metadata, .duration').text().trim() || 'N/A';
         const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
 
         if (href && cleanTitle && !results.some(r => r.link === href)) {
             const fullLink = href.startsWith('http') ? href : `${BASE_URL}${href}`;
-
             results.push({
                 title: cleanTitle,
                 duration: duration.replace(/[\t\n\r]+/g, ' ').trim(),
@@ -69,6 +59,29 @@ function extractVideos(html, $) {
             });
         }
     });
+
+    // එකක්වත් ආවේ නැත්නම් සියලුම a[href*="/video-"] ටැග්ස් සෘජුවම ස්කෑන් කිරීම (Fallback)
+    if (results.length === 0) {
+        $('a[href*="/video-"]').each((i, el) => {
+            const href = $(el).attr('href') || '';
+            const title = $(el).attr('title') || $(el).text().trim();
+            const parent = $(el).closest('div');
+            
+            let img = parent.find('img').attr('data-src') || parent.find('img').attr('data-src-small') || parent.find('img').attr('src') || '';
+            let duration = parent.find('.metadata, .duration').text().trim() || 'N/A';
+            
+            const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+            if (href && cleanTitle && cleanTitle.length > 3 && !results.some(r => r.link === href)) {
+                results.push({
+                    title: cleanTitle,
+                    duration: duration.replace(/[\t\n\r]+/g, ' ').trim(),
+                    image: img,
+                    link: href.startsWith('http') ? href : `${BASE_URL}${href}`
+                });
+            }
+        });
+    }
 
     return results;
 }
