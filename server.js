@@ -8,9 +8,53 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 app.use(cors());
+app.use(express.json());
 
 // Cache setup - 12 Hours TTL
 const appCache = new NodeCache({ stdTTL: 43200 });
+
+// --- RENDER FREE TIER PROTECTION: LIGHTWEIGHT RATE LIMITER ---
+const requestCounts = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 Minute window
+const MAX_REQUESTS_PER_WINDOW = 40; // Max 40 requests per minute per IP
+
+const rateLimiter = (req, res, next) => {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    
+    if (!requestCounts.has(ip)) {
+        requestCounts.set(ip, { count: 1, startTime: now });
+    } else {
+        const data = requestCounts.get(ip);
+        if (now - data.startTime < RATE_LIMIT_WINDOW) {
+            data.count++;
+            if (data.count > MAX_REQUESTS_PER_WINDOW) {
+                return res.status(429).json({
+                    status: false,
+                    error: "Too many requests. Please slow down.",
+                    message: "⚠️ සර්වර් එක ඉතා කාර්යබහුලයි. කරුණාකර තත්පර කිහිපයකින් නැවත උත්සාහ කරන්න."
+                });
+            }
+        } else {
+            data.count = 1;
+            data.startTime = now;
+        }
+    }
+    next();
+};
+
+// Apply Rate Limiter to all API routes
+app.use(rateLimiter);
+
+// Cleanup old IP records from memory every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of requestCounts.entries()) {
+        if (now - data.startTime > RATE_LIMIT_WINDOW * 5) {
+            requestCounts.delete(ip);
+        }
+    }
+}, 300000);
 
 const BASE_URL = 'https://www.xnxx.com';
 const HEADERS = {
@@ -22,7 +66,7 @@ const HEADERS = {
 app.get('/', (req, res) => {
     res.json({
         status: true,
-        message: "IMALSHA XNXX FAST API is Live 🚀",
+        message: "IMALSHA XNXX FAST API is Live & Protected 🚀",
         endpoints: {
             latest: "/api/v1/xnxx/latest?page=1",
             search: "/api/v1/xnxx/search?q=query&page=1",
@@ -36,17 +80,14 @@ function extractVideos(html, $) {
     const results = [];
 
     $('.thumb-block').each((i, el) => {
-        // Video එකට අදාළ සැබෑ Video Link එක හා Title එක පමණක් තෝරා ගැනීම
         const videoAnchor = $(el).find('a[href*="/video-"]').first();
         const href = videoAnchor.attr('href') || '';
         
-        // Title එක Title attribute එකෙන් හෝ .thumb-under p a / .title එකෙන් ලබා ගැනීම
         let title = videoAnchor.attr('title') || 
                     $(el).find('.thumb-under p.metadata a, .thumb-under p a').not('[href*="/porn-maker/"]').not('[href*="/profiles/"]').text().trim() ||
                     $(el).find('.thumb-under p a').first().text().trim() || 
                     $(el).find('img').attr('alt') || '';
         
-        // Image extraction
         const imgEl = $(el).find('img');
         let img = imgEl.attr('data-src') || 
                   imgEl.attr('data-src-small') || 
@@ -59,11 +100,9 @@ function extractVideos(html, $) {
             if (imgMatch) img = imgMatch[0];
         }
 
-        // Duration & Meta
         let duration = $(el).find('.metadata, .duration, .metadata .flag').text().trim() || 'N/A';
         const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
 
-        // ළඟ තියෙන Channel names මඟහැර සැබෑ Video Link එක පමණක් Filter කිරීම
         if (href && href.includes('/video-') && cleanTitle && !results.some(r => r.link.includes(href))) {
             const fullLink = href.startsWith('http') ? href : `${BASE_URL}${href}`;
             results.push({
@@ -118,7 +157,11 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
         res.json(responseData);
     } catch (err) {
         console.error(`❌ Error in latest: ${err.message}`);
-        res.status(500).json({ status: false, error: err.message });
+        res.status(500).json({ 
+            status: false, 
+            error: "Server temporarily busy", 
+            message: "⚠️ සර්වර් එක තාවකාලිකව කාර්යබහුලයි. කරුණාකර තත්පර කිහිපයකින් නැවත උත්සාහ කරන්න." 
+        });
     }
 });
 
@@ -163,7 +206,11 @@ app.get('/api/v1/xnxx/search', async (req, res) => {
         res.json(responseData);
     } catch (err) {
         console.error(`❌ Error in search: ${err.message}`);
-        res.status(500).json({ status: false, error: err.message });
+        res.status(500).json({ 
+            status: false, 
+            error: "Server temporarily busy", 
+            message: "⚠️ සර්වර් එක තාවකාලිකව කාර්යබහුලයි. කරුණාකර තත්පර කිහිපයකින් නැවත උත්සාහ කරන්න." 
+        });
     }
 });
 
@@ -225,8 +272,12 @@ app.get('/api/v1/xnxx/infodl', async (req, res) => {
 
     } catch (err) {
         console.error(`❌ Error in infodl: ${err.message}`);
-        res.status(500).json({ status: false, error: err.message });
+        res.status(500).json({ 
+            status: false, 
+            error: "Server temporarily busy", 
+            message: "⚠️ සර්වර් එක තාවකාලිකව කාර්යබහුලයි. කරුණාකර තත්පර කිහිපයකින් නැවත උත්සාහ කරන්න." 
+        });
     }
 });
 
-app.listen(PORT, () => console.log(`🚀 XNXX API Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 XNXX Protected API Server running on port ${PORT}`));
