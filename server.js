@@ -31,22 +31,35 @@ app.get('/', (req, res) => {
     });
 });
 
-// Helper function to extract and clean video items properly (Ultra-Compatible Fallback)
+// Helper function to extract images & video info strictly for both Latest & Search
 function extractVideos(html, $) {
     const results = [];
 
-    // XNXX වල මූලික වීඩියෝ බ්ලොක්ස් හෝ thumb පෙළගැසෙන තැන්
-    $('.thumb-block, .mozaique .thumb, div.thumb-under').each((i, el) => {
-        const container = $(el).closest('.thumb-block');
-        const titleAnchor = container.find('.title a, a[href*="/video-"]').first();
-        const href = titleAnchor.attr('href') || container.find('a[href*="/video-"]').attr('href') || '';
+    // XNXX Search Results & Thumb Blocks Iteration
+    $('.thumb-block').each((i, el) => {
+        // 1. Link & Title Extraction
+        const titleAnchor = $(el).find('.thumb-under a, .title a, p a').first();
+        const href = titleAnchor.attr('href') || $(el).find('a[href*="/video-"]').attr('href') || '';
+        let title = titleAnchor.attr('title') || titleAnchor.text().trim() || $(el).find('img').attr('alt') || '';
         
-        let title = titleAnchor.attr('title') || titleAnchor.text().trim();
-        
-        const imgEl = container.find('img');
-        let img = imgEl.attr('data-src') || imgEl.attr('data-src-small') || imgEl.attr('src') || '';
+        // 2. Comprehensive Image URL Selector (XNXX Search Lazy Load attributes)
+        const imgEl = $(el).find('img');
+        let img = imgEl.attr('data-src') || 
+                  imgEl.attr('data-src-small') || 
+                  imgEl.attr('src') || 
+                  imgEl.attr('data-srcset') || '';
 
-        let duration = container.find('.metadata, .duration').text().trim() || 'N/A';
+        // 3. Fallback: Search inside HTML string / style attributes if img tag attribute is missing
+        if (!img || img.startsWith('data:image')) {
+            const blockHtml = $(el).html() || '';
+            const imgMatch = blockHtml.match(/https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/i);
+            if (imgMatch) {
+                img = imgMatch[0];
+            }
+        }
+
+        // 4. Duration & Meta
+        let duration = $(el).find('.metadata, .duration, .metadata .flag').text().trim() || 'N/A';
         const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
 
         if (href && cleanTitle && !results.some(r => r.link === href)) {
@@ -59,29 +72,6 @@ function extractVideos(html, $) {
             });
         }
     });
-
-    // එකක්වත් ආවේ නැත්නම් සියලුම a[href*="/video-"] ටැග්ස් සෘජුවම ස්කෑන් කිරීම (Fallback)
-    if (results.length === 0) {
-        $('a[href*="/video-"]').each((i, el) => {
-            const href = $(el).attr('href') || '';
-            const title = $(el).attr('title') || $(el).text().trim();
-            const parent = $(el).closest('div');
-            
-            let img = parent.find('img').attr('data-src') || parent.find('img').attr('data-src-small') || parent.find('img').attr('src') || '';
-            let duration = parent.find('.metadata, .duration').text().trim() || 'N/A';
-            
-            const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-            if (href && cleanTitle && cleanTitle.length > 3 && !results.some(r => r.link === href)) {
-                results.push({
-                    title: cleanTitle,
-                    duration: duration.replace(/[\t\n\r]+/g, ' ').trim(),
-                    image: img,
-                    link: href.startsWith('http') ? href : `${BASE_URL}${href}`
-                });
-            }
-        });
-    }
 
     return results;
 }
@@ -130,7 +120,7 @@ app.get('/api/v1/xnxx/latest', async (req, res) => {
     }
 });
 
-// 2. SEARCH ENDPOINT
+// 2. SEARCH ENDPOINT (Direct Regex Image Extraction for Search Page)
 app.get('/api/v1/xnxx/search', async (req, res) => {
     try {
         const query = req.query.q;
