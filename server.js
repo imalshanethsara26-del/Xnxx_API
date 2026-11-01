@@ -43,7 +43,6 @@ function extractVideos(html, $) {
         let duration = parent.find('.metadata, .duration').text().trim() || 'N/A';
 
         if (href && title && title.length > 2 && !results.some(r => r.link === href)) {
-            // \n සහ \t සම්පූර්ණයෙන්ම පිරිසිදු කිරීම
             const cleanTitle = title.replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
             if (cleanTitle && !cleanTitle.includes('XNXX')) {
                 results.push({
@@ -58,15 +57,17 @@ function extractVideos(html, $) {
     return results;
 }
 
-// 1. LATEST ENDPOINT (Fixed Pagination with ?p= parameter)
+// 1. LATEST ENDPOINT (Fixed Real Pagination for XNXX)
 app.get('/api/v1/xnxx/latest', async (req, res) => {
     try {
         const pageNum = req.query.page || 1;
         const monthYear = req.query.month; // උදා: 2026-09
         
-        let targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/?p=${pageNum}`;
+        let targetUrl = `${BASE_URL}/best`;
         if (monthYear) {
-            targetUrl = pageNum == 1 ? `${BASE_URL}/best/${monthYear}` : `${BASE_URL}/best/${monthYear}/?p=${pageNum}`;
+            targetUrl = pageNum == 1 ? `${BASE_URL}/best/${monthYear}` : `${BASE_URL}/best/${monthYear}/${pageNum}`;
+        } else {
+            targetUrl = pageNum == 1 ? `${BASE_URL}/best` : `${BASE_URL}/best/${pageNum}`;
         }
 
         const cacheKey = `xnxx_latest_${monthYear || 'general'}_page_${pageNum}`;
